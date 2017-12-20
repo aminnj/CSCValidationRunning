@@ -57,8 +57,31 @@ class CSCValHists{
                       int en, int st, int ri, int ch, int la);
 
   // fill the global segment position tree
-  void fillSegmentTree(float x, float y, float gx, float gy,
-                       int en, int st, int ri, int ch);
+  void fillSegmentTree(
+          unsigned int event, int run, int lumi,
+          float x, float y, 
+          float gx, float gy, 
+          float segDirX, float segDirY, float segDirZ,
+          int en, int st, int ri, int ch,
+          int nhits,
+          float eta, float phi,
+          float chi2prob,
+          float time,
+          // float tslope, int wgbx, float avglayer,
+          int tbincode,
+          std::vector<int> tbins,
+          // int* tbins,
+          float theta, float globTheta,
+          int nSegments, int nME42Segments,
+          float dOpposingR, float dOpposingPhi, int nbh,
+          float station2Ring, float station2Chamber,
+          float station3Ring, float station3Chamber,
+          float station4Ring, float station4Chamber,
+          float station2globX, float station2globY,
+          float station3globX, float station3globY,
+          float station4globX, float station4globY,
+          int station2HasSeg, int station3HasSeg, int station4HasSeg
+                       );
 
   // insert any TH1 into the big map
   void insertPlot(TH1* thePlot, std::string name, std::string folder);
@@ -176,16 +199,57 @@ class CSCValHists{
 
   // A struct for creating a Tree/Branch of position info
   struct posRecord {
+    unsigned int event;
+    int run;
+    int lumi;
     int endcap;
     int station;
     int ring;
     int chamber;
     int layer;
+    int nhits;
     float localx;
     float localy;
     float globalx;
     float globaly;
+    float segDirX;
+    float segDirY;
+    float segDirZ;
+    float eta;
+    float phi;
+    float chi2prob;
+    float time;
+    // float tslope;
+    // int wgbx;
+    // float avglayer;
+    int tbincode;
+    // std::vector<int> tbins;
+    // int* tbins;
+    float theta;
+    float globTheta;
+    int nSegments;
+    int nME42Segments;
+    float dOpposingR;
+    float dOpposingPhi;
+    int nbh;
+    float station2Ring;
+    float station2Chamber;
+    float station3Ring;
+    float station3Chamber;
+    float station4Ring;
+    float station4Chamber;
+    float station2globX;
+    float station2globY;
+    float station3globX;
+    float station3globY;
+    float station4globX;
+    float station4globY;
+    int station2HasSeg;
+    int station3HasSeg;
+    int station4HasSeg;
   } rHpos, segpos;
+
+  std::vector<int> seg_tbins;
 
   // The root tree
   TTree *rHTree;

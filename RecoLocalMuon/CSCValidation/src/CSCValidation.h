@@ -70,6 +70,10 @@
 #include <DataFormats/CSCRecHit/interface/CSCSegmentCollection.h>
 #include "DataFormats/MuonDetId/interface/RPCDetId.h"
 
+#include "DataFormats/Scalers/interface/DcsStatus.h"
+#include "DataFormats/Scalers/interface/LumiScalers.h"
+#include "DataFormats/Scalers/interface/ScalersRaw.h"
+
 #include "DataFormats/L1GlobalMuonTrigger/interface/L1MuGMTReadoutRecord.h"
 #include "DataFormats/L1GlobalMuonTrigger/interface/L1MuGMTReadoutCollection.h"
 #include "DataFormats/Common/interface/TriggerResults.h"
@@ -116,6 +120,8 @@
 #include "TTree.h"
 #include "TProfile2D.h"
 
+#include <algorithm>
+
 class CSCValidation : public edm::EDAnalyzer {
 public:
   /// Constructor
@@ -152,7 +158,7 @@ private:
   void  doRecHits(edm::Handle<CSCRecHit2DCollection> recHits, edm::ESHandle<CSCGeometry> cscGeom);
   void  doSimHits(edm::Handle<CSCRecHit2DCollection> recHits, edm::Handle<edm::PSimHitContainer> simHits);
   void  doPedestalNoise(edm::Handle<CSCStripDigiCollection> strips);
-  void  doSegments(edm::Handle<CSCSegmentCollection> cscSegments, edm::ESHandle<CSCGeometry> cscGeom);
+  void  doSegments(edm::Handle<CSCSegmentCollection> cscSegments, edm::ESHandle<CSCGeometry> cscGeom, edm::Handle<CSCWireDigiCollection> wires);
   void  doResolution(edm::Handle<CSCSegmentCollection> cscSegments, edm::ESHandle<CSCGeometry> cscGeom);
   void  doEfficiencies(edm::Handle<CSCWireDigiCollection> wires, edm::Handle<CSCStripDigiCollection> strips,
                        edm::Handle<CSCRecHit2DCollection> recHits, edm::Handle<CSCSegmentCollection> cscSegments,
@@ -207,6 +213,12 @@ private:
   bool firstEvent;
   bool cleanEvent;
 
+  unsigned int iEvent; 
+  int iRun; 
+  int iLumi; 
+
+  int trigType;
+
   //
   //
   // The root file for the histograms.
@@ -250,6 +262,7 @@ private:
   edm::EDGetTokenT<edm::TriggerResults>            tr_token;
   edm::EDGetTokenT<reco::TrackCollection>          sa_token;
   edm::EDGetTokenT<edm::PSimHitContainer>          sh_token;
+  edm::EDGetTokenT<LumiScalersCollection>          scalersTag_;
 
   // module on/off switches
   bool makeOccupancyPlots;

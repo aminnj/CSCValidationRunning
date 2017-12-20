@@ -52,6 +52,8 @@ CSCValidation::CSCValidation(const ParameterSet& pset){
   l1_token = consumes<L1MuGMTReadoutCollection>( pset.getParameter<edm::InputTag>("l1aTag") );
   tr_token = consumes<TriggerResults>( pset.getParameter<edm::InputTag>("hltTag") );
   sh_token = consumes<PSimHitContainer>( pset.getParameter<edm::InputTag>("simHitTag") );
+  scalersTag_ = consumes<LumiScalersCollection>(pset.getParameter<edm::InputTag>("scalersTag"));
+
 
   // flags to switch on/off individual modules
   makeOccupancyPlots   = pset.getUntrackedParameter<bool>("makeOccupancyPlots",true);
@@ -197,8 +199,19 @@ void CSCValidation::analyze(const Event & event, const EventSetup& eventSetup){
   // increment counter
   nEventsAnalyzed++;
 
-  //int iRun   = event.id().run();
-  //int iEvent = event.id().event();
+  iRun   = event.id().run();
+  iEvent = event.id().event();
+  iLumi = event.luminosityBlock();
+
+  edm::Handle<LumiScalersCollection> scalersHandle;
+  event.getByToken(scalersTag_, scalersHandle);
+
+
+  if (event.isRealData() && scalersHandle.isValid() && scalersHandle->size()) {
+      float evt_instantLumi = (*scalersHandle)[0].instantLumi();
+      float evt_pileup = (*scalersHandle)[0].pileup();
+      std::cout <<  " evt_instantLumi: " << evt_instantLumi <<  " evt_pileup: " << evt_pileup <<  std::endl;
+  }
 
   // Get the Digis
   edm::Handle<CSCWireDigiCollection> wires;
@@ -266,7 +279,8 @@ void CSCValidation::analyze(const Event & event, const EventSetup& eventSetup){
 
   // Look at the l1a trigger info (returns true if csc L1A present)
   bool CSCL1A = false;
-  if (makeTriggerPlots || useTriggerFilter) CSCL1A = doTrigger(pCollection);
+  // if (makeTriggerPlots || useTriggerFilter) CSCL1A = doTrigger(pCollection);
+  // trigType = doTrigger(pCollection);
   if (!useTriggerFilter) CSCL1A = true;  // always true if not filtering on trigger
 
 
@@ -299,7 +313,9 @@ void CSCValidation::analyze(const Event & event, const EventSetup& eventSetup){
     if (isSimulation && makeSimHitPlots) doSimHits(recHits,simHits);
 
     // general look at Segments
-    if (makeSegmentPlots) doSegments(cscSegments,cscGeom);
+  // int iRun   = event.id().run();
+  // int iEvent = event.id().event();
+    if (makeSegmentPlots) doSegments(cscSegments,cscGeom,wires);
 
     // look at hit resolution
     if (makeResolutionPlots) doResolution(cscSegments,cscGeom);
@@ -613,6 +629,8 @@ bool CSCValidation::doTrigger(edm::Handle<L1MuGMTReadoutCollection> pCollection)
 
   }
 
+  // csc_l1a dt_l1a rpcf_l1a rpcb_l1a beamHaloTrigger myBXNumber 
+
   // Fill some histograms with L1A info
   if (csc_l1a)          histos->fill1DHist(myBXNumber,"vtBXNumber","BX Number",4001,-0.5,4000.5,"Trigger");
   if (csc_l1a)          histos->fill1DHist(1,"vtBits","trigger bits",11,-0.5,10.5,"Trigger");
@@ -639,9 +657,17 @@ bool CSCValidation::doTrigger(edm::Handle<L1MuGMTReadoutCollection> pCollection)
 
   // if valid CSC L1A then return true for possible use elsewhere
 
-  if (csc_l1a) return true;
-  
-  return false;
+  // if (csc_l1a) return true;
+  // return false;
+
+  int bitstr = 0;
+  if (csc_l1a) bitstr |= 1 << 0;
+  if (dt_l1a) bitstr |= 1 << 1;
+  if (rpcf_l1a) bitstr |= 1 << 2;
+  if (rpcb_l1a) bitstr |= 1 << 3;
+  if (beamHaloTrigger) bitstr |= 1 << 4;
+
+  return bitstr;
 
 }
 
@@ -1009,10 +1035,83 @@ void CSCValidation::doSimHits(edm::Handle<CSCRecHit2DCollection> recHits, edm::H
 //
 // ===============================================
 
-void CSCValidation::doSegments(edm::Handle<CSCSegmentCollection> cscSegments, edm::ESHandle<CSCGeometry> cscGeom){
+void CSCValidation::doSegments(edm::Handle<CSCSegmentCollection> cscSegments, edm::ESHandle<CSCGeometry> cscGeom, edm::Handle<CSCWireDigiCollection> wires){
+
+    // std::cout <<  " iRun: " << iRun <<  " iEvent: " << iEvent <<  " iLumi: " << iLumi <<  std::endl;
+
 
   // get CSC segment collection
   int nSegments = cscSegments->size();
+  int nME42Segments = 0;
+
+  // Make LUT for segments in each chamber and wire digis
+  bool AllSegments[2][4][4][36];
+  int allWires[2][4][4][36][6][256]; // endcap station ring chamber layer wiregroup
+  std::vector<int> allWires_vec[2][36][6][256]; // endcap station ring chamber layer wiregroup
+  for(int iE = 0;iE<2;iE++){
+      for(int iS = 0;iS<4;iS++){
+          for(int iR = 0; iR<4;iR++){
+              for(int iC =0;iC<36;iC++){
+                  AllSegments[iE][iS][iR][iC] = false;
+                  for(int iL=0;iL<6;iL++){
+                      for(int iWG=0;iWG<256;iWG++){
+                      allWires[iE][iS][iR][iC][iL][iWG] = 0;
+                      allWires_vec[iE][iC][iL][iWG].clear();
+                      }
+                  }
+              }
+          }
+      }
+  }
+
+  for(CSCSegmentCollection::const_iterator segEffIt=cscSegments->begin(); segEffIt != cscSegments->end(); segEffIt++) {
+      CSCDetId idseg  = (CSCDetId)(*segEffIt).cscDetId();
+      AllSegments[idseg.endcap()-1][idseg.station()-1][idseg.ring()-1][idseg.chamber()-1] = true;
+  }
+
+  for (CSCWireDigiCollection::DigiRangeIterator dWDiter=wires->begin(); dWDiter!=wires->end(); dWDiter++) {
+      CSCDetId idrec = (CSCDetId)(*dWDiter).first;
+      std::vector<CSCWireDigi>::const_iterator wireIter = (*dWDiter).second.first;
+      std::vector<CSCWireDigi>::const_iterator lWire = (*dWDiter).second.second;
+      for( ; wireIter != lWire; ++wireIter) {
+          vector<int> timebinson = wireIter->getTimeBinsOn();
+          int iwg = wireIter->getWireGroup();
+          // std::cout <<  " timebinson.size(): " << timebinson.size() <<  " idrec.endcap(): " << idrec.endcap() <<  " idrec.station(): " << idrec.station() <<  " idrec.ring(): " << idrec.ring() <<  " idrec.chamber(): " << idrec.chamber() <<  " idrec.layer(): " << idrec.layer() <<  " iwg: " << iwg <<  std::endl;
+          // std::cout <<  " timebinson.size(): " << timebinson.size() <<  std::endl;
+          for (auto tb : timebinson) {
+              // std::cout <<  " tb: " << tb <<  std::endl;
+              allWires[idrec.endcap()-1][idrec.station()-1][idrec.ring()-1][idrec.chamber()-1][idrec.layer()-1][iwg-1] |= 1 << tb;
+          }
+          if (idrec.station() == 4 && idrec.ring() == 2) {
+              allWires_vec[idrec.endcap()-1][idrec.chamber()-1][idrec.layer()-1][iwg-1] = timebinson;
+              // std::cout <<  " timebinson.size(): " << timebinson.size() <<  std::endl;
+          }
+          // std::cout <<  " allWires[idrec.endcap()-1][idrec.station()-1][idrec.ring()-1][idrec.chamber()-1][idrec.layer()-1]: " << allWires[idrec.endcap()-1][idrec.station()-1][idrec.ring()-1][idrec.chamber()-1][idrec.layer()-1] <<  std::endl;
+      }
+  }
+
+  // map from iendcap (1,2) to vector of pairs of (global R, global phi)
+  std::map<int, std::vector<std::pair<float,float> > > haloMap; 
+  haloMap[1].clear();
+  haloMap[2].clear();
+  for(CSCSegmentCollection::const_iterator dSiter=cscSegments->begin(); dSiter != cscSegments->end(); dSiter++) {
+    CSCDetId id  = (CSCDetId)(*dSiter).cscDetId();
+    LocalPoint segPos = (*dSiter).localPosition();
+    int kEndcap  = id.endcap();
+    float globPhi   = 0.;
+    float globR = 0.;
+    const CSCChamber* cscchamber = cscGeom->chamber(id);
+    if (cscchamber) {
+      GlobalPoint globalPosition = cscchamber->toGlobal(segPos);
+      globPhi   = globalPosition.phi();
+      float globX = globalPosition.x();
+      float globY = globalPosition.y();
+      globR = pow(globX*globX+globY*globY,0.5);
+
+    }
+    haloMap[kEndcap].push_back(make_pair(globR, globPhi));
+  }
+  // std::cout <<  " haloMap[1].size(): " << haloMap[1].size() <<  " haloMap[2].size(): " << haloMap[2].size() <<  std::endl;
 
   // -----------------------
   // loop over segments
@@ -1031,32 +1130,304 @@ void CSCValidation::doSegments(edm::Handle<CSCSegmentCollection> cscSegments, ed
     float chisq    = (*dSiter).chi2();
     int nhits      = (*dSiter).nRecHits();
     int nDOF       = 2*nhits-4;
+    float time = (*dSiter).time();
     double chisqProb = ChiSquaredProbability( (double)chisq, nDOF );
-    LocalPoint localPos = (*dSiter).localPosition();
-    float segX     = localPos.x();
-    float segY     = localPos.y();
+    LocalPoint segPos = (*dSiter).localPosition();
+    float segX     = segPos.x();
+    float segY     = segPos.y();
     LocalVector segDir = (*dSiter).localDirection();
     double theta   = segDir.theta();
+
+    double segDirX = segDir.x();
+    double segDirY = segDir.y();
+    double segDirZ = segDir.z();
 
     // global transformation
     float globX = 0.;
     float globY = 0.;
     float globTheta = 0.;
+    float globEta = 0.;
     float globPhi   = 0.;
     const CSCChamber* cscchamber = cscGeom->chamber(id);
     if (cscchamber) {
-      GlobalPoint globalPosition = cscchamber->toGlobal(localPos);
+      GlobalPoint globalPosition = cscchamber->toGlobal(segPos);
       globX = globalPosition.x();
       globY = globalPosition.y();
+      globEta = globalPosition.eta();
+      globPhi   = globalPosition.phi();
       GlobalVector globalDirection = cscchamber->toGlobal(segDir);
       globTheta = globalDirection.theta();
-      globPhi   = globalDirection.phi();
     }
+    float globR = pow(globX*globX+globY*globY,0.5);
 
+    // find segment in opposing endcap that is closest in global x^2+y^2
+    // store the dphi and dR for this segment
+    float closestPhi = -1.;
+    float closestR = -9999.;
+    float mindistR = 9999.;
+    int nbh = 0;
+    for (auto pair : haloMap[3-kEndcap]) {
+        float gr = pair.first;
+        float gp = pair.second;
+        float gx = gr*cos(gp);
+        float gy = gr*sin(gp);
+        float distR = pow(pow(gx-globX,2)+pow(gy-globY,2),0.5);
+        if (distR < mindistR) {
+            mindistR = distR;
+            closestPhi = gp;
+            closestR = gr;
+        }
+        float dr = fabs(globR - gr);
+        float dp = std::min(float(fabs(gp-globPhi)), float(2 * 3.14159265 - fabs(gp-globPhi)) );
+        if (dr < 100 && dp < 0.25) { // within 1 meter and ~15 deg
+            nbh += 1;
+        }
+    }
+    float dOpposingPhi = -999.;
+    float dOpposingR = -999.;
+    if (closestR > -9990.) {
+        dOpposingPhi = std::min(float(fabs(closestPhi-globPhi)), float(2 * 3.14159265 - fabs(closestPhi-globPhi)) );
+        dOpposingR = globR - closestR;
+    }
+    // std::cout <<  " dOpposingPhi: " << dOpposingPhi <<  " dOpposingR: " << dOpposingR <<  std::endl;
+
+    int station2Chamber = -1;
+    int station2Ring = -1;
+    int station2HasSeg = -1;
+    int station3Chamber = -1;
+    int station3Ring = -1;
+    int station3HasSeg = -1;
+    int station4Chamber = -1;
+    int station4Ring = -1;
+    int station4HasSeg = -1;
+
+    float station2globX = 0.;
+    float station2globY = 0.;
+    float station3globX = 0.;
+    float station3globY = 0.;
+    float station4globX = 0.;
+    float station4globY = 0.;
+
+
+    std::vector<CSCRecHit2D> theseRecHits = (*dSiter).specificRecHits();
+    // std::cout <<  " nhits: " << nhits <<  std::endl;
+    // std::vector < std::pair <int, float> > layerTpeaks;
+    int tbincode = 0;
+    std::vector<int> tbins;
+    // int tbins_array[50];
+    // for (int i = 0; i < 50; i++) tbins_array[i] = 0;
+    // int wgroupsBX = 0;
+
+    // float avglayer = 0;
+    for ( std::vector<CSCRecHit2D>::const_iterator iRH = theseRecHits.begin(); iRH != theseRecHits.end(); iRH++) {
+        CSCDetId idRH = (CSCDetId)(*iRH).cscDetId();
+        // int kRing    = idRH.ring();
+        // int kRing    = idRH.ring();
+        // int kStation = idRH.station();
+        int kLayer   = idRH.layer();
+        float tpeak     =  iRH->tpeak();
+        // wgroupsBX     =  iRH->wgroupsBX();
+        int iwg = iRH->hitWire();
+        // avglayer += kLayer;
+        // std::cout <<  " iwg: " << iwg <<  " wgroupsBX: " << wgroupsBX <<  std::endl;
+        // int quality = iRH->quality();
+        // layerTpeaks.push_back(make_pair(kLayer,tpeak));
+        tbincode |= allWires[idRH.endcap()-1][idRH.station()-1][idRH.ring()-1][idRH.chamber()-1][idRH.layer()-1][iwg-1];
+        int cnt = 0;
+        if (idRH.station() == 4 && idRH.ring() == 2) {
+            for (int tbin : allWires_vec[idRH.endcap()-1][idRH.chamber()-1][idRH.layer()-1][iwg-1]) {
+                tbins.push_back(tbin);
+                // std::cout <<  " tbin: " << tbin <<  std::endl;
+                // if (cnt < 50) tbins_array[cnt] = tbin;
+                cnt++;
+            }
+        }
+    }
+    // std::cout <<  " tbins.size(): " << tbins.size() <<  std::endl;
+    // avglayer /= theseRecHits.size();
+    // std::cout <<  " avglayer: " << avglayer <<  std::endl;
+    // std::cout <<  " tbincode: " << tbincode <<  std::endl;
+    // std::sort(layerTpeaks.begin(),layerTpeaks.end());
+    // (t-lastlayer - t-firstlayer) / (ilayer last - ilayer first)
+    // float tslope = (layerTpeaks[layerTpeaks.size()-1].second - layerTpeaks[0].second) /
+    //                (layerTpeaks[layerTpeaks.size()-1].first - layerTpeaks[0].first);
+
+    // for (auto pair : layerTpeaks) {
+    //     std::cout <<  " pair.first: " << pair.first <<  " pair.second: " << pair.second <<  std::endl;
+    // }
+    // std::cout <<  " tslope: " << tslope <<  std::endl;
+
+
+    if (kStation == 4 && kRing == 2) {
+        nME42Segments++;
+        const CSCGeometry::ChamberContainer& ChamberContainer = cscGeom->chambers();
+        for(size_t nCh=0;nCh<ChamberContainer.size();nCh++){
+            const CSCChamber *thiscscchamber = ChamberContainer[nCh];
+            if (thiscscchamber->id().endcap() != kEndcap) continue;
+            if (thiscscchamber->id().station() != 2 && thiscscchamber->id().station() != 3) continue;
+
+            if (station2Chamber > 0 && station3Chamber > 0) {
+                // We've already found the two chambers in stations2/3 that the ME4/2 segment
+                // extrapolated to, so we're done
+                break;
+            }
+
+            LocalPoint localCenter(0.,0.,0);
+            GlobalPoint cscchamberCenter =  thiscscchamber->toGlobal(localCenter);
+            GlobalPoint globSegPos = cscchamber->toGlobal(segPos);
+            GlobalVector globSegDir = cscchamber->toGlobal(segDir);
+            double paramaterLine = lineParametrization(globSegPos.z(),cscchamberCenter.z() , globSegDir.z());
+
+            double xExtrapolated = extrapolate1D(globSegPos.x(),globSegDir.x(), paramaterLine);
+            double yExtrapolated = extrapolate1D(globSegPos.y(),globSegDir.y(), paramaterLine);
+            GlobalPoint globP (xExtrapolated, yExtrapolated, cscchamberCenter.z());
+
+            int endcap = thiscscchamber->id().endcap();
+            int station = thiscscchamber->id().station();
+            int ring = thiscscchamber->id().ring();
+            int chamber = thiscscchamber->id().chamber();
+
+            // If we haven't already, store the extrapolated global x,y for the
+            // ME4/2 segment at the z planes for stations 2 and 3
+            if (fabs(station2globX) < 1e-6 && station == 2) {
+                station2globX = globP.x();
+                station2globY = globP.y();
+            }
+            if (fabs(station3globX) < 1e-6 && station == 3) {
+                station3globX = globP.x();
+                station3globY = globP.y();
+            }
+
+            // Where does the extrapolated point lie in the (tested) chamber local frame? Here: 
+            LocalPoint extrapolatedPointLocal = thiscscchamber->toLocal(globP);
+            const CSCLayer *layer_p = thiscscchamber->layer(1);//layer 1
+            const CSCLayerGeometry *layerGeom = layer_p->geometry ();
+            const std::array<const float, 4> & layerBounds = layerGeom->parameters ();
+            float shiftFromEdge = 15.;//cm
+            float shiftFromDeadZone = 10.;
+            // is the extrapolated point within a sensitive region
+            bool pass = withinSensitiveRegion(extrapolatedPointLocal, layerBounds, 
+                    thiscscchamber->id().station(), thiscscchamber->id().ring(), 
+                    shiftFromEdge, shiftFromDeadZone);
+            if (!pass) continue;
+
+
+            if (station == 2) {
+                station2Chamber = chamber;
+                station2Ring = ring;
+                station2HasSeg = AllSegments[endcap-1][station-1][ring-1][chamber-1];
+            }
+            if (station == 3) {
+                station3Chamber = chamber;
+                station3Ring = ring;
+                station3HasSeg = AllSegments[endcap-1][station-1][ring-1][chamber-1];
+            }
+
+
+        }
+
+        // std::cout << "(" << kEndcap << "," << kStation << "," << kRing << "," << kChamber << ")" << std::endl;
+        // std::cout << "   --> station 2 (" << kEndcap << "," << 2 << "," << station2Ring << "," << station2Chamber << ")" << std::endl;
+        // std::cout << "       --> global x,y (" << station2globX << "," << station2globY << ")" << std::endl;
+        // std::cout << "   --> station 3 (" << kEndcap << "," << 3 << "," << station3Ring << "," << station3Chamber << ")" << std::endl;
+        // std::cout << "       --> global x,y (" << station3globX << "," << station3globY << ")" << std::endl;
+
+    }
+    // std::cout <<  " nSegments: " << nSegments <<  " nME42Segments: " << nME42Segments <<  std::endl;
+
+    if (kStation == 3 && kRing == 2) {
+        const CSCGeometry::ChamberContainer& ChamberContainer = cscGeom->chambers();
+        for(size_t nCh=0;nCh<ChamberContainer.size();nCh++){
+            const CSCChamber *thiscscchamber = ChamberContainer[nCh];
+            if (thiscscchamber->id().endcap() != kEndcap) continue;
+            if (thiscscchamber->id().station() != 4) continue;
+
+            if (station4Chamber > 0) {
+                // We've already found the chamber in station4 that the ME3/2 segment
+                // extrapolated to, so we're done
+                break;
+            }
+
+            LocalPoint localCenter(0.,0.,0);
+            GlobalPoint cscchamberCenter =  thiscscchamber->toGlobal(localCenter);
+            GlobalPoint globSegPos = cscchamber->toGlobal(segPos);
+            GlobalVector globSegDir = cscchamber->toGlobal(segDir);
+            double paramaterLine = lineParametrization(globSegPos.z(),cscchamberCenter.z() , globSegDir.z());
+
+            double xExtrapolated = extrapolate1D(globSegPos.x(),globSegDir.x(), paramaterLine);
+            double yExtrapolated = extrapolate1D(globSegPos.y(),globSegDir.y(), paramaterLine);
+            GlobalPoint globP (xExtrapolated, yExtrapolated, cscchamberCenter.z());
+
+            int endcap = thiscscchamber->id().endcap();
+            int station = thiscscchamber->id().station();
+            int ring = thiscscchamber->id().ring();
+            int chamber = thiscscchamber->id().chamber();
+
+            // If we haven't already, store the extrapolated global x,y for the
+            // ME3/2 segment at the z plane for station 4
+            if (fabs(station4globX) < 1e-6 && station == 4) {
+                station4globX = globP.x();
+                station4globY = globP.y();
+            }
+
+            // Where does the extrapolated point lie in the (tested) chamber local frame? Here: 
+            LocalPoint extrapolatedPointLocal = thiscscchamber->toLocal(globP);
+            const CSCLayer *layer_p = thiscscchamber->layer(1);//layer 1
+            const CSCLayerGeometry *layerGeom = layer_p->geometry ();
+            const std::array<const float, 4> & layerBounds = layerGeom->parameters ();
+            float shiftFromEdge = 15.;//cm
+            float shiftFromDeadZone = 10.;
+            // is the extrapolated point within a sensitive region
+            bool pass = withinSensitiveRegion(extrapolatedPointLocal, layerBounds, 
+                    thiscscchamber->id().station(), thiscscchamber->id().ring(), 
+                    shiftFromEdge, shiftFromDeadZone);
+            if (!pass) continue;
+
+
+            if (station == 4) {
+                station4Chamber = chamber;
+                station4Ring = ring;
+                station4HasSeg = AllSegments[endcap-1][station-1][ring-1][chamber-1];
+            }
+
+
+        }
+
+        // std::cout << "(" << kEndcap << "," << kStation << "," << kRing << "," << kChamber << ")" << std::endl;
+        // std::cout << "   --> station 2 (" << kEndcap << "," << 2 << "," << station2Ring << "," << station2Chamber << ")" << std::endl;
+        // std::cout << "       --> global x,y (" << station2globX << "," << station2globY << ")" << std::endl;
+        // std::cout << "   --> station 3 (" << kEndcap << "," << 3 << "," << station3Ring << "," << station3Chamber << ")" << std::endl;
+        // std::cout << "       --> global x,y (" << station3globX << "," << station3globY << ")" << std::endl;
+
+    }
 
     // Fill segment position branch
     if (writeTreeToFile && segTreeCount < 1500000){
-      histos->fillSegmentTree(segX, segY, globX, globY, kEndcap, kStation, kRing, kChamber);
+      histos->fillSegmentTree(
+              iEvent, iRun, iLumi,
+              segX, segY, 
+              globX, globY,
+              segDirX, segDirY, segDirZ,
+              kEndcap, kStation, kRing, kChamber,
+              nhits,
+              globEta, globPhi,
+              chisqProb,
+              time,
+              // tslope, wgroupsBX, avglayer,
+              tbincode,
+              tbins,
+              // tbins_array,
+              theta, globTheta,
+              nSegments, nME42Segments,
+              dOpposingR, dOpposingPhi, nbh,
+              station2Ring, station2Chamber,
+              station3Ring, station3Chamber,
+              station4Ring, station4Chamber,
+              station2globX, station2globY,
+              station3globX, station3globY,
+              station4globX, station4globY,
+              station2HasSeg, station3HasSeg, station4HasSeg
+              );
       segTreeCount++;
     }
 
@@ -1142,8 +1513,8 @@ void CSCValidation::doResolution(edm::Handle<CSCSegmentCollection> cscSegments, 
     histos->fill1DHistByType(residual,"hSResid","Fitted Position on Strip - Reconstructed for Layer 3",id,100,-0.5,0.5,"Resolution");
     histos->fill1DHistByType(pull,"hSStripPosPull","Strip Measurement Pulls",id,100,-5.0,5.0,"Resolution");
     histos->fillProfile(chamberSerial(id),residual,"hSResidProfile","Fitted Position on Strip - Reconstructed for Layer 3",601,-0.5,600.5,-0.5,0.5,"Resolution");
+    histos->fill1DHistByChamber(residual,"hSResid","Fitted Position on Strip - Reconstructed for Layer 3",id,100,-0.5,0.5,"DetailedResolution");
     if (detailedAnalysis){
-      histos->fill1DHistByChamber(residual,"hSResid","Fitted Position on Strip - Reconstructed for Layer 3",id,100,-0.5,0.5,"DetailedResolution");
       histos->fill1DHistByChamber(pull,"hSStripPosPull","Strip Measurement Pulls",id,100,-5.0,5.0,"Resolution");
     }
 
@@ -1408,6 +1779,7 @@ void CSCValidation::doEfficiencies(edm::Handle<CSCWireDigiCollection> wires, edm
   std::vector <unsigned int> seg_ME2(2,0) ;
   std::vector <unsigned int> seg_ME3(2,0) ;
   std::vector < std::pair <CSCDetId, CSCSegment> > theSegments(4);
+  std::vector < std::pair <CSCDetId, CSCSegment> > ME42Segments;
   // Segments
   for(CSCSegmentCollection::const_iterator segEffIt=cscSegments->begin(); segEffIt != cscSegments->end(); segEffIt++) {
     CSCDetId idseg  = (CSCDetId)(*segEffIt).cscDetId();
@@ -1418,6 +1790,10 @@ void CSCValidation::doEfficiencies(edm::Handle<CSCWireDigiCollection> wires, edm
     // "Intrinsic" efficiency measurement relies on "good" segment extrapolation - we need the pre-selection below
     // station 2 "good" segment will be used for testing efficiencies in ME1 and ME3
     // station 3 "good" segment will be used for testing efficiencies in ME2 and ME4
+    if(4==idseg.station() || 2==idseg.ring()){
+        std::pair <CSCDetId, CSCSegment> specSeg = make_pair( (CSCDetId)(*segEffIt).cscDetId(),*segEffIt);
+        ME42Segments.push_back(specSeg);
+    }
     if(2==idseg.station() || 3==idseg.station()){
       unsigned int seg_tmp ; 
       if(2==idseg.station()){
@@ -1452,6 +1828,9 @@ void CSCValidation::doEfficiencies(edm::Handle<CSCWireDigiCollection> wires, edm
     */
     
   }
+
+  // std::cout <<  " ME42Segments.size(): " << ME42Segments.size() <<  std::endl;
+
   // Simple efficiency calculations
   for(int iE = 0;iE<2;iE++){
     for(int iS = 0;iS<4;iS++){

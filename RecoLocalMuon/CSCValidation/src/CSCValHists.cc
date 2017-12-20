@@ -60,7 +60,8 @@ using namespace std;
 
     // Create a branch on the tree
     rHTree->Branch("rHpos",&rHpos,"endcap/I:station/I:ring/I:chamber/I:layer/I:localx/F:localy/F:globalx/F:globaly/F");
-    segTree->Branch("segpos",&segpos,"endcap/I:station/I:ring/I:chamber/I:layer/I:localx/F:localy/F:globalx/F:globaly/F");
+    segTree->Branch("seg",&segpos,"event/I:run/I:lumi/I:endcap/I:station/I:ring/I:chamber/I:layer/I:nhits/I:localx/F:localy/F:globalx/F:globaly/F:segDirX/F:segDirY/F:segDirZ/F:eta/F:phi/F:chi2prob/F:time/F:tbincode/I:theta/F:globTheta/F:nSegments/I:nME42Segments/I:dOpposingR/F:dOpposingPhi/F:nbh/F:station2Ring/F:station2Chamber/F:station3Ring/F:station3Chamber/F:station4Ring/F:station4Chamber/F:station2globX/F:station2globY/F:station3globX/F:station3globY/F:station4globX/F:station4globY/F:station2HasSeg/I:station3HasSeg/I:station4HasSeg/I");
+    segTree->Branch("tbins",&seg_tbins);
 
   }
 
@@ -81,18 +82,88 @@ using namespace std;
 
   }
   
-  void CSCValHists::fillSegmentTree(float x, float y, float gx, float gy, int en, int st, int ri, int ch){
+  void CSCValHists::fillSegmentTree(
+          unsigned int event, int run, int lumi,
+          float x, float y, 
+          float gx, float gy, 
+          float segDirX, float segDirY, float segDirZ,
+          int en, int st, int ri, int ch,
+          int nhits,
+          float eta, float phi,
+          float chi2prob,
+          float time,
+          // float tslope, int wgbx, float avglayer,
+          int tbincode,
+          std::vector<int> tbins,
+          // int* tbins,
+          float theta, float globTheta,
+          int nSegments, int nME42Segments,
+          float dOpposingR, float dOpposingPhi, int nbh,
+          float station2Ring, float station2Chamber,
+          float station3Ring, float station3Chamber,
+          float station4Ring, float station4Chamber,
+          float station2globX, float station2globY,
+          float station3globX, float station3globY,
+          float station4globX, float station4globY,
+          int station2HasSeg, int station3HasSeg, int station4HasSeg
+          ){
+
+              // std::cout <<  " st: " << st <<  " ri: " << ri <<  " tbins.size(): " << tbins.size() <<  std::endl;
 
     // Fill the segment position branch
+    segpos.event = event;
+    segpos.run = run;
+    segpos.lumi = lumi;
     segpos.localx  = x;
     segpos.localy  = y;
     segpos.globalx = gx;
     segpos.globaly = gy;
+    segpos.segDirX = segDirX;
+    segpos.segDirY = segDirY;
+    segpos.segDirZ = segDirZ;
     segpos.endcap  = en;
     segpos.ring    = ri;
     segpos.station = st;
     segpos.chamber = ch;
+    segpos.nhits = nhits;
     segpos.layer   = 0;
+    segpos.eta = eta;
+    segpos.phi = phi;
+    segpos.chi2prob = chi2prob;
+    segpos.time = time;
+    // segpos.tslope = tslope;
+    // segpos.wgbx = wgbx;
+    // segpos.avglayer = avglayer;
+    segpos.tbincode = tbincode;
+    // segpos.tbins = tbins;
+    segpos.theta = theta;
+    segpos.globTheta = globTheta;
+    segpos.nSegments = nSegments;
+    segpos.nME42Segments = nME42Segments;
+    segpos.dOpposingR = dOpposingR;
+    segpos.dOpposingPhi = dOpposingPhi;
+    segpos.nbh = nbh;
+    segpos.station2Ring = station2Ring;
+    segpos.station2Chamber = station2Chamber;
+    segpos.station3Ring = station3Ring;
+    segpos.station3Chamber = station3Chamber;
+    segpos.station4Ring = station4Ring;
+    segpos.station4Chamber = station4Chamber;
+    segpos.station2globX = station2globX;
+    segpos.station2globY = station2globY;
+    segpos.station3globX = station3globX;
+    segpos.station3globY = station3globY;
+    segpos.station4globX = station4globX;
+    segpos.station4globY = station4globY;
+    segpos.station2HasSeg = station2HasSeg;
+    segpos.station3HasSeg = station3HasSeg;
+    segpos.station4HasSeg = station4HasSeg;
+
+    seg_tbins.clear();
+    for (auto tbin : tbins) {
+        seg_tbins.push_back(tbin);
+    }
+
     segTree->Fill();
 
   }
