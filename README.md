@@ -29,3 +29,5 @@ While the full-blown machinery of CSCValidation can be used (see README from par
 this is intended to be just a lcoal copy of CSCValidation with simple submission. Simple submission
 with CRAB can be found in
 `cd RecoLocalMuon/CSCValidation/batch/`
+
+Instructions for editing and analyzing are in `RecoLocalMuon/CSCValidation/src`
