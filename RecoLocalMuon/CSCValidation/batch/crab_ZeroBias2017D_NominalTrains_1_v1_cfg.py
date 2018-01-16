@@ -8,6 +8,7 @@ config.General.transferLogs = True
 
 config.section_("JobType")
 config.JobType.pluginName = 'Analysis'
+config.JobType.outputFiles = ["output.root"]
 config.JobType.psetName = '../test/pset_me42.py'
 
 config.section_("Data")
