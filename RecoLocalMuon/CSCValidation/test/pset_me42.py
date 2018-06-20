@@ -10,8 +10,10 @@ process.load('Configuration.StandardSequences.FrontierConditions_GlobalTag_condD
 process.load("Configuration/StandardSequences/RawToDigi_Data_cff")
 process.load("Configuration.StandardSequences.Reconstruction_cff")
 
+from EventFilter.ScalersRawToDigi.scalersRawToDigi_cfi import scalersRawToDigi
+
 from Configuration.AlCa.GlobalTag import GlobalTag
-process.GlobalTag = GlobalTag(process.GlobalTag, '92X_dataRun2_Prompt_v8', '')
+process.GlobalTag = GlobalTag(process.GlobalTag, '101X_dataRun2_Prompt_v10', '')
 
 inputFiles = cms.untracked.vstring(
 # "/store/relval/CMSSW_9_1_1/RelValTTbar_14TeV/GEN-SIM-RECO/PU25ns_91X_upgrade2023_realistic_v1_D17PU140-v1/10000/F2A0BF44-6C40-E711-A8A5-0CC47A4D76B6.root",
@@ -21,13 +23,13 @@ inputFiles = cms.untracked.vstring(
 # "/store/data/Run2017D/SingleMuon/RAW/v1/000/302/159/00000/569EC0CD-B48E-E711-A3F5-02163E0126BE.root"
 # http://uaf-10.t2.ucsd.edu/~namin/makers/disMaker/?query=%2FZeroBiasNominalTrains1%2FRun2017D-v1%2FRAW&type=files&short=short
 # "/store/data/Run2017D/ZeroBiasNominalTrains1/RAW/v1/000/302/674/00000/DCEC35D6-6C98-E711-ABD6-02163E0144D5.root"
-"file:DCEC35D6-6C98-E711-ABD6-02163E0144D5.root"
+"/store/data/Run2018B/ZeroBias/RAW/v1/000/317/213/00000/9ED4AEE9-DC64-E811-847C-FA163EC4B64E.root"
 # /Cosmics/Run2017D-v1/RAW
 # "/store/data/Run2017D/Cosmics/RAW/v1/000/302/046/00000/9063B133-CE8D-E711-B5D3-02163E019BBF.root"
 )
 
 
-process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(9000) )
+process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(1000) )
 process.options = cms.untracked.PSet( SkipEvent =
 cms.untracked.vstring('ProductNotFound') )
 readFiles = cms.untracked.vstring(
@@ -180,7 +182,7 @@ process.TFileService = cms.Service("TFileService",
                                    fileName = cms.string('TPEHists_157.root')
                                    )
 
-process.p = cms.Path(process.gtDigis * process.muonCSCDigis * process.csc2DRecHits * process.cscSegments * process.cscTriggerPrimitiveDigis * process.cscValidation)
+process.p = cms.Path(process.gtDigis * process.muonCSCDigis * process.csc2DRecHits * process.cscSegments * process.cscTriggerPrimitiveDigis * scalersRawToDigi * process.cscValidation)
 
 process.Timing = cms.Service("Timing",
         summaryOnly = cms.untracked.bool(True)
