@@ -217,6 +217,9 @@ private:
   int iRun; 
   int iLumi; 
 
+  float evt_instantLumi;
+  float evt_pileup;
+
   int trigType;
 
   //

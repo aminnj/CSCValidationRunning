@@ -60,7 +60,7 @@ using namespace std;
 
     // Create a branch on the tree
     rHTree->Branch("rHpos",&rHpos,"endcap/I:station/I:ring/I:chamber/I:layer/I:localx/F:localy/F:globalx/F:globaly/F");
-    segTree->Branch("seg",&segpos,"event/I:run/I:lumi/I:endcap/I:station/I:ring/I:chamber/I:layer/I:nhits/I:localx/F:localy/F:globalx/F:globaly/F:segDirX/F:segDirY/F:segDirZ/F:eta/F:phi/F:chi2prob/F:time/F:tbincode/I:theta/F:globTheta/F:nSegments/I:nME42Segments/I:dOpposingR/F:dOpposingPhi/F:nbh/F:station2Ring/F:station2Chamber/F:station3Ring/F:station3Chamber/F:station4Ring/F:station4Chamber/F:station2globX/F:station2globY/F:station3globX/F:station3globY/F:station4globX/F:station4globY/F:station2HasSeg/I:station3HasSeg/I:station4HasSeg/I");
+    segTree->Branch("seg",&segpos,"event/I:run/I:lumi/I:instantlumi/F:pileup/F:endcap/I:station/I:ring/I:chamber/I:layer/I:nhits/I:localx/F:localy/F:globalx/F:globaly/F:segDirX/F:segDirY/F:segDirZ/F:eta/F:phi/F:chi2prob/F:time/F:tbincode/I:theta/F:globTheta/F:nSegments/I:nME42Segments/I:dOpposingR/F:dOpposingPhi/F:nbh/F:station2Ring/F:station2Chamber/F:station3Ring/F:station3Chamber/F:station4Ring/F:station4Chamber/F:station2globX/F:station2globY/F:station3globX/F:station3globY/F:station4globX/F:station4globY/F:station2HasSeg/I:station3HasSeg/I:station4HasSeg/I");
     segTree->Branch("tbins",&seg_tbins);
 
   }
@@ -84,6 +84,7 @@ using namespace std;
   
   void CSCValHists::fillSegmentTree(
           unsigned int event, int run, int lumi,
+          float evt_instantLumi, float evt_pileup,
           float x, float y, 
           float gx, float gy, 
           float segDirX, float segDirY, float segDirZ,
@@ -114,6 +115,8 @@ using namespace std;
     segpos.event = event;
     segpos.run = run;
     segpos.lumi = lumi;
+    segpos.evt_instantLumi = evt_instantLumi;
+    segpos.evt_pileup = evt_pileup;
     segpos.localx  = x;
     segpos.localy  = y;
     segpos.globalx = gx;

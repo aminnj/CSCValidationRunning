@@ -59,6 +59,7 @@ class CSCValHists{
   // fill the global segment position tree
   void fillSegmentTree(
           unsigned int event, int run, int lumi,
+          float evt_instantLumi, float evt_pileup,
           float x, float y, 
           float gx, float gy, 
           float segDirX, float segDirY, float segDirZ,
@@ -202,6 +203,8 @@ class CSCValHists{
     unsigned int event;
     int run;
     int lumi;
+    float evt_instantLumi;
+    float evt_pileup;
     int endcap;
     int station;
     int ring;

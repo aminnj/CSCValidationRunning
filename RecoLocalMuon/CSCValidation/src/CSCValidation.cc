@@ -207,10 +207,12 @@ void CSCValidation::analyze(const Event & event, const EventSetup& eventSetup){
   event.getByToken(scalersTag_, scalersHandle);
 
 
-  if (event.isRealData() && scalersHandle.isValid() && scalersHandle->size()) {
-      float evt_instantLumi = (*scalersHandle)[0].instantLumi();
-      float evt_pileup = (*scalersHandle)[0].pileup();
-      std::cout <<  " evt_instantLumi: " << evt_instantLumi <<  " evt_pileup: " << evt_pileup <<  std::endl;
+  evt_instantLumi = -1.;
+  evt_pileup = -1.;
+  // if (event.isRealData() && scalersHandle.isValid() && scalersHandle->size()) {
+  if (scalersHandle.isValid() && scalersHandle->size()) {
+      evt_instantLumi = (*scalersHandle)[0].instantLumi();
+      evt_pileup = (*scalersHandle)[0].pileup();
   }
 
   // Get the Digis
@@ -1037,7 +1039,7 @@ void CSCValidation::doSimHits(edm::Handle<CSCRecHit2DCollection> recHits, edm::H
 
 void CSCValidation::doSegments(edm::Handle<CSCSegmentCollection> cscSegments, edm::ESHandle<CSCGeometry> cscGeom, edm::Handle<CSCWireDigiCollection> wires){
 
-    // std::cout <<  " iRun: " << iRun <<  " iEvent: " << iEvent <<  " iLumi: " << iLumi <<  std::endl;
+    // std::cout <<  " iRun: " << iRun <<  " iEvent: " << iEvent <<  " iLumi: " << iLumi <<  " evt_instantLumi: " << evt_instantLumi <<  " evt_pileup: " << evt_pileup <<  std::endl;
 
 
   // get CSC segment collection
@@ -1405,6 +1407,7 @@ void CSCValidation::doSegments(edm::Handle<CSCSegmentCollection> cscSegments, ed
     if (writeTreeToFile && segTreeCount < 1500000){
       histos->fillSegmentTree(
               iEvent, iRun, iLumi,
+              evt_instantLumi, evt_pileup,
               segX, segY, 
               globX, globY,
               segDirX, segDirY, segDirZ,
