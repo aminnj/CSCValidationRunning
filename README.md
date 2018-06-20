@@ -5,21 +5,17 @@ Repository to setup the latest version of CSCValidation to be run automatically 
 
 Setup a new release
 ```
-cmsrel CMSSW_9_2_10 # or current CMSSW version
-cd CMSSW_9_2_10/src
+cmsrel CMSSW_10_1_5 # or current CMSSW version
+cd CMSSW_10_1_5/src
 cmsenv
 git cms-init # make sure this happens before checking out this repository
 ```
 
-Clone the repository
+Clone the repository and set up
 ```
 git clone git@github.com:aminnj/CSCValidationRunning.git
-git checkout me42
-```
-
-Run the setup script
-```
 cd CSCValidationRunning
+git checkout me42
 ./setup.sh
 ```
 
